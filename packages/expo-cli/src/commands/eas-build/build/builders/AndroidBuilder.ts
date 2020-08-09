@@ -5,6 +5,7 @@ import fs from 'fs-extra';
 import ora from 'ora';
 import path from 'path';
 
+import CommandError from '../../../../CommandError';
 import AndroidCredentialsProvider, {
   AndroidCredentials,
 } from '../../../../credentials/provider/AndroidCredentialsProvider';
@@ -16,10 +17,10 @@ import {
 } from '../../../../easJson';
 import { gitAddAsync } from '../../../../git';
 import log from '../../../../log';
+import { Builder, BuilderContext } from '../../types';
+import * as gitUtils from '../../utils/git';
 import { ensureCredentialsAsync } from '../credentials';
 import gradleContent from '../templates/gradleContent';
-import { Builder, BuilderContext } from '../types';
-import * as gitUtils from '../utils/git';
 
 interface CommonJobProperties {
   platform: Platform.Android;
@@ -62,8 +63,39 @@ class AndroidBuilder implements Builder {
     this.credentials = await provider.getCredentialsAsync(credentialsSource);
   }
 
+  private async isProjectConfiguredAsync(): Promise<boolean> {
+    const androidAppDir = path.join(this.ctx.projectDir, 'android', 'app');
+    const buildGradlePath = path.join(androidAppDir, 'build.gradle');
+    const easGradlePath = path.join(androidAppDir, 'eas-build.gradle');
+
+    const hasEasGradleFile = await fs.pathExists(easGradlePath);
+
+    const buildGradleContent = await fs.readFile(path.join(buildGradlePath), 'utf-8');
+    const applyEasGradle = 'apply from: "./eas-build.gradle"';
+
+    const hasEasGradleApply = buildGradleContent
+      .split('\n')
+      // Check for both single and double quotes
+      .some(line => line === applyEasGradle || line === applyEasGradle.replace(/"/g, "'"));
+
+    return hasEasGradleApply && hasEasGradleFile;
+  }
+
+  public async ensureProjectConfiguredAsync(): Promise<void> {
+    if (!(await this.isProjectConfiguredAsync())) {
+      throw new CommandError(
+        'Project is not configured. Please run "expo eas:build:init" first to configure the project'
+      );
+    }
+  }
+
   public async configureProjectAsync(): Promise<void> {
     const spinner = ora('Making sure your Android project is set up properly');
+
+    if (await this.isProjectConfiguredAsync()) {
+      spinner.succeed('Android project is already configured');
+      return;
+    }
 
     const { projectDir } = this.ctx;
 
@@ -77,14 +109,7 @@ class AndroidBuilder implements Builder {
     const buildGradleContent = await fs.readFile(path.join(buildGradlePath), 'utf-8');
     const applyEasGradle = 'apply from: "./eas-build.gradle"';
 
-    const isAlreadyConfigured = buildGradleContent
-      .split('\n')
-      // Check for both single and double quotes
-      .some(line => line === applyEasGradle || line === applyEasGradle.replace(/"/g, "'"));
-
-    if (!isAlreadyConfigured) {
-      await fs.writeFile(buildGradlePath, `${buildGradleContent.trim()}\n${applyEasGradle}\n`);
-    }
+    await fs.writeFile(buildGradlePath, `${buildGradleContent.trim()}\n${applyEasGradle}\n`);
 
     try {
       await gitUtils.ensureGitStatusIsCleanAsync();
@@ -102,7 +127,7 @@ class AndroidBuilder implements Builder {
           log(`${chalk.green(figures.tick)} Successfully committed the configuration changes.`);
         } catch (e) {
           throw new Error(
-            "Aborting, run the build command once you're ready. Make sure to commit any changes you've made."
+            "Aborting, run the command again once you're ready. Make sure to commit any changes you've made."
           );
         }
       } else {

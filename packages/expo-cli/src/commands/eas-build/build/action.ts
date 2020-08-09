@@ -1,6 +1,4 @@
-import { getConfig } from '@expo/config';
-import { ApiV2, User, UserManager } from '@expo/xdl';
-import { build } from '@hapi/joi';
+import { ApiV2 } from '@expo/xdl';
 import chalk from 'chalk';
 import delayAsync from 'delay-async';
 import fs from 'fs-extra';
@@ -15,16 +13,16 @@ import { ensureProjectExistsAsync } from '../../../projects';
 import { UploadType, uploadAsync } from '../../../uploads';
 import { createProgressTracker } from '../../utils/progress';
 import { platformDisplayNames } from '../constants';
-import { Build, BuildCommandPlatform, BuildStatus } from '../types';
-import AndroidBuilder from './builders/AndroidBuilder';
-import iOSBuilder from './builders/iOSBuilder';
-import { Builder, BuilderContext } from './types';
+import { Build, BuildCommandPlatform, BuildStatus, Builder, BuilderContext } from '../types';
+import createBuilderContextAsync from '../utils/createBuilderContextAsync';
 import {
   ensureGitRepoExistsAsync,
   ensureGitStatusIsCleanAsync,
   makeProjectTarballAsync,
-} from './utils/git';
-import { printBuildResults, printLogsUrls } from './utils/misc';
+} from '../utils/git';
+import { printBuildResults, printLogsUrls } from '../utils/misc';
+import AndroidBuilder from './builders/AndroidBuilder';
+import iOSBuilder from './builders/iOSBuilder';
 
 interface BuildOptions {
   platform: BuildCommandPlatform;
@@ -78,40 +76,6 @@ async function buildAction(projectDir: string, options: BuildOptions): Promise<v
   }
 }
 
-async function createBuilderContextAsync(
-  projectDir: string,
-  eas: EasConfig,
-  {
-    platform = BuildCommandPlatform.ALL,
-    nonInteractive = false,
-    skipCredentialsCheck = false,
-    skipProjectConfiguration = false,
-  }: {
-    platform?: BuildCommandPlatform;
-    nonInteractive?: boolean;
-    skipCredentialsCheck?: boolean;
-    skipProjectConfiguration?: boolean;
-  }
-): Promise<BuilderContext> {
-  const user: User = await UserManager.ensureLoggedInAsync();
-  const { exp } = getConfig(projectDir, { skipSDKVersionRequirement: true });
-  const accountName = exp.owner || user.username;
-  const projectName = exp.slug;
-
-  return {
-    eas,
-    projectDir,
-    user,
-    accountName,
-    projectName,
-    exp,
-    platform,
-    nonInteractive,
-    skipCredentialsCheck,
-    skipProjectConfiguration,
-  };
-}
-
 async function startBuildsAsync(
   ctx: BuilderContext,
   projectId: string
@@ -146,7 +110,7 @@ async function startBuildAsync(
     await builder.setupAsync();
     await builder.ensureCredentialsAsync();
     if (!builder.ctx.skipProjectConfiguration) {
-      await builder.configureProjectAsync();
+      await builder.ensureProjectConfiguredAsync();
     }
 
     const fileSize = await makeProjectTarballAsync(tarPath);

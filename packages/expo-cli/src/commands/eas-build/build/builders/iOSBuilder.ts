@@ -17,9 +17,9 @@ import {
 } from '../../../../easJson';
 import log from '../../../../log';
 import prompts from '../../../../prompts';
+import { Builder, BuilderContext } from '../../types';
+import * as gitUtils from '../../utils/git';
 import { ensureCredentialsAsync } from '../credentials';
-import { Builder, BuilderContext } from '../types';
-import * as gitUtils from '../utils/git';
 import { getBundleIdentifier } from '../utils/ios';
 
 interface CommonJobProperties {
@@ -82,6 +82,10 @@ class iOSBuilder implements Builder {
     }
   }
 
+  public async ensureProjectConfiguredAsync(): Promise<void> {
+    await this.configureProjectAsync();
+  }
+
   public async configureProjectAsync(): Promise<void> {
     if (this.buildProfile.workflow !== Workflow.Generic) {
       return;
@@ -93,9 +97,9 @@ class iOSBuilder implements Builder {
       throw new Error('Call ensureCredentialsAsync first!');
     }
 
-    const bundleIdentifier = await getBundleIdentifier(this.ctx.projectDir, this.ctx.exp);
-
     const spinner = ora('Configuring the Xcode project');
+
+    const bundleIdentifier = await getBundleIdentifier(this.ctx.projectDir, this.ctx.exp);
 
     const profileName = ProvisioningProfileUtils.readProfileName(
       this.credentials.provisioningProfile
@@ -125,7 +129,7 @@ class iOSBuilder implements Builder {
           log(`${chalk.green(figures.tick)} Successfully committed the configuration changes.`);
         } catch (e) {
           throw new Error(
-            "Aborting, run the build command once you're ready. Make sure to commit any changes you've made."
+            "Aborting, run the command again once you're ready. Make sure to commit any changes you've made."
           );
         }
       } else {
