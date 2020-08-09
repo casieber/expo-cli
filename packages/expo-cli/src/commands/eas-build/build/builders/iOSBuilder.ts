@@ -61,11 +61,18 @@ class iOSBuilder implements Builder {
       return;
     }
     const bundleIdentifier = await getBundleIdentifier(this.ctx.projectDir, this.ctx.exp);
-    const provider = new iOSCredentialsProvider(this.ctx.projectDir, {
-      projectName: this.ctx.projectName,
-      accountName: this.ctx.accountName,
-      bundleIdentifier,
-    });
+    const provider = new iOSCredentialsProvider(
+      this.ctx.projectDir,
+      {
+        projectName: this.ctx.projectName,
+        accountName: this.ctx.accountName,
+        bundleIdentifier,
+      },
+      {
+        nonInteractive: this.ctx.nonInteractive,
+        skipCredentialsCheck: this.ctx.skipCredentialsCheck,
+      }
+    );
     await provider.initAsync();
     const credentialsSource = await ensureCredentialsAsync(
       provider,

@@ -48,10 +48,11 @@ class AndroidBuilder implements Builder {
     if (!this.shouldLoadCredentials()) {
       return;
     }
-    const provider = new AndroidCredentialsProvider(this.ctx.projectDir, {
-      projectName: this.ctx.projectName,
-      accountName: this.ctx.accountName,
-    });
+    const provider = new AndroidCredentialsProvider(
+      this.ctx.projectDir,
+      { projectName: this.ctx.projectName, accountName: this.ctx.accountName },
+      { nonInteractive: this.ctx.nonInteractive }
+    );
     await provider.initAsync();
     const credentialsSource = await ensureCredentialsAsync(
       provider,
