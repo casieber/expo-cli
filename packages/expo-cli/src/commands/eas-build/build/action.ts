@@ -1,5 +1,5 @@
 import { getConfig } from '@expo/config';
-import { ApiV2, User, UserManager } from '@expo/xdl';
+import { Analytics, ApiV2, User, UserManager } from '@expo/xdl';
 import { build } from '@hapi/joi';
 import chalk from 'chalk';
 import delayAsync from 'delay-async';
@@ -14,7 +14,7 @@ import log from '../../../log';
 import { ensureProjectExistsAsync } from '../../../projects';
 import { UploadType, uploadAsync } from '../../../uploads';
 import { createProgressTracker } from '../../utils/progress';
-import { platformDisplayNames } from '../constants';
+import { analyticsEvents, platformDisplayNames } from '../constants';
 import { Build, BuildCommandPlatform, BuildStatus } from '../types';
 import AndroidBuilder from './builders/AndroidBuilder';
 import iOSBuilder from './builders/iOSBuilder';
@@ -39,6 +39,7 @@ interface BuildOptions {
 
 async function buildAction(projectDir: string, options: BuildOptions): Promise<void> {
   const platforms = Object.values(BuildCommandPlatform);
+  const trackingId = uuidv4();
 
   const { platform, profile } = options;
   if (!platform || !platforms.includes(platform)) {
@@ -49,12 +50,18 @@ async function buildAction(projectDir: string, options: BuildOptions): Promise<v
     );
   }
 
+  Analytics.logEvent(analyticsEvents.BUILD_COMMAND, {
+    tracking_id: trackingId,
+    platform: options.platform,
+  });
+
   await ensureGitRepoExistsAsync();
   await ensureGitStatusIsCleanAsync();
 
   const easConfig: EasConfig = await new EasJsonReader(projectDir, platform).readAsync(profile);
   const ctx = await createBuilderContextAsync(projectDir, easConfig, {
     platform,
+    trackingId,
     nonInteractive: options.parent?.nonInteractive,
     skipCredentialsCheck: options?.skipCredentialsCheck,
     skipProjectConfiguration: options?.skipProjectConfiguration,
@@ -82,11 +89,13 @@ async function createBuilderContextAsync(
   projectDir: string,
   eas: EasConfig,
   {
+    trackingId,
     platform = BuildCommandPlatform.ALL,
     nonInteractive = false,
     skipCredentialsCheck = false,
     skipProjectConfiguration = false,
   }: {
+    trackingId: string;
     platform?: BuildCommandPlatform;
     nonInteractive?: boolean;
     skipCredentialsCheck?: boolean;
@@ -106,6 +115,7 @@ async function createBuilderContextAsync(
     projectName,
     exp,
     platform,
+    trackingId,
     nonInteractive,
     skipCredentialsCheck,
     skipProjectConfiguration,

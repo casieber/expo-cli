@@ -13,6 +13,7 @@ export interface BuilderContext {
   projectName: string;
   exp: ExpoConfig;
   platform: BuildCommandPlatform;
+  trackingId: string;
   nonInteractive: boolean;
   skipCredentialsCheck: boolean;
   skipProjectConfiguration: boolean;

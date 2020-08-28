@@ -1,4 +1,5 @@
 import { Android, BuildType, Job, Platform, sanitizeJob } from '@expo/build-tools';
+import { Analytics } from '@expo/xdl';
 import chalk from 'chalk';
 import figures from 'figures';
 import fs from 'fs-extra';
@@ -16,6 +17,7 @@ import {
 } from '../../../../easJson';
 import { gitAddAsync } from '../../../../git';
 import log from '../../../../log';
+import { analyticsEvents } from '../../constants';
 import { ensureCredentialsAsync } from '../credentials';
 import gradleContent from '../templates/gradleContent';
 import { Builder, BuilderContext } from '../types';
@@ -44,22 +46,30 @@ class AndroidBuilder implements Builder {
   public async setupAsync(): Promise<void> {}
 
   public async ensureCredentialsAsync(): Promise<void> {
-    this.credentialsPrepared = true;
-    if (!this.shouldLoadCredentials()) {
-      return;
+    try {
+      this.credentialsPrepared = true;
+      if (!this.shouldLoadCredentials()) {
+        return;
+      }
+      const provider = new AndroidCredentialsProvider(this.ctx.projectDir, {
+        projectName: this.ctx.projectName,
+        accountName: this.ctx.accountName,
+      });
+      await provider.initAsync();
+      const credentialsSource = await ensureCredentialsAsync(
+        provider,
+        this.buildProfile.workflow,
+        this.buildProfile.credentialsSource,
+        this.ctx.nonInteractive
+      );
+      this.credentials = await provider.getCredentialsAsync(credentialsSource);
+    } catch (err) {
+      Analytics.logEvent(analyticsEvents.GATHER_CREDENTIALS_FAIL, {
+        tracking_id: this.ctx.trackingId,
+        platform: 'android',
+        reason: err.message,
+      });
     }
-    const provider = new AndroidCredentialsProvider(this.ctx.projectDir, {
-      projectName: this.ctx.projectName,
-      accountName: this.ctx.accountName,
-    });
-    await provider.initAsync();
-    const credentialsSource = await ensureCredentialsAsync(
-      provider,
-      this.buildProfile.workflow,
-      this.buildProfile.credentialsSource,
-      this.ctx.nonInteractive
-    );
-    this.credentials = await provider.getCredentialsAsync(credentialsSource);
   }
 
   public async configureProjectAsync(): Promise<void> {
